@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Data
+data/
+*.csv
+*.log
+
+# Backtest Reports
+Backtest_Reports/
+test_output.txt
