@@ -12,7 +12,8 @@ import os
 import traceback
 import pandas as pd
 import numpy as np
-import scipy.stats as stats
+import math
+from statistics import NormalDist
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -58,7 +59,7 @@ def run_advanced_validation():
     alpha = 0.05
     bonferroni_alpha = alpha / N
     # 根據 bonferroni_alpha 反推 t 值門檻 (單尾檢定)
-    t_threshold = stats.norm.ppf(1 - bonferroni_alpha)
+    t_threshold = NormalDist().inv_cdf(1 - bonferroni_alpha)
     
     print(f"📊 Bonferroni 統計校正")
     print(f"  - 原始顯著水準 α: {alpha}")
@@ -67,7 +68,7 @@ def run_advanced_validation():
     print("=" * 100)
 
     # 3. 在 IS 期間跑所有策略
-    bt_is = IntradayBacktester(force_close_time="13:30")
+    bt_is = IntradayBacktester()
     
     is_results = []
     print("⏳ 正在進行 In-Sample (2025) 測試...")
@@ -88,7 +89,7 @@ def run_advanced_validation():
             # 簡化的 Sharpe t-statistic 計算: t = SR * sqrt(Years)
             t_stat = sr * np.sqrt(years_is) if years_is > 0 else 0
             # 計算單尾 p-value
-            p_val = stats.norm.sf(t_stat) if t_stat > 0 else 1.0
+            p_val = 0.5 * math.erfc(t_stat / math.sqrt(2)) if t_stat > 0 else 1.0
 
             is_results.append({
                 "Strategy": display_name,
@@ -119,7 +120,7 @@ def run_advanced_validation():
     print("🔮 Out-of-Sample (2026) 盲測：檢驗是否過度擬合")
     print("=" * 100)
     
-    bt_oos = IntradayBacktester(force_close_time="13:30")
+    bt_oos = IntradayBacktester()
     
     oos_results = []
     for strat in top_3_strategies:

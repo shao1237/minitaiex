@@ -60,34 +60,32 @@ class BrokerAPI:
 
     def connect(self) -> bool:
         """連接券商 API。"""
-        if self.paper_trading:
-            print("[BrokerAPI] 🧪 Paper Trading 模式，無需連接券商。")
-            self.connected = True
-            return True
-
         if not HAS_SHIOAJI:
-            print("[BrokerAPI] ❌ 實盤模式需要安裝 shioaji。")
+            print("[BrokerAPI] ❌ 實盤與模擬模式皆需要安裝 shioaji。")
             return False
 
         try:
-            self.api = sj.Shioaji()
+            self.api = sj.Shioaji(simulation=self.paper_trading)
             self.api.login(
                 api_key=config.SHIOAJI_API_KEY,
                 secret_key=config.SHIOAJI_SECRET_KEY,
             )
 
-            # 啟用憑證（下單必要）
-            if config.SHIOAJI_CA_PATH:
+            # 啟用憑證（僅實盤下單必要）
+            if not self.paper_trading and config.SHIOAJI_CA_PATH:
                 self.api.activate_ca(
                     ca_path=config.SHIOAJI_CA_PATH,
                     ca_passwd=config.SHIOAJI_CA_PASSWORD,
                     person_id=config.SHIOAJI_PERSON_ID,
                 )
 
-            # 取得小台近月合約
-            self.contract = self.api.Contracts.Futures[config.FUTURES_CODE].MXF
+            # 取得小台近月連續合約（動態對應 MXFR1 或 TXFR1）
+            futures_group = self.api.Contracts.Futures[config.FUTURES_CODE]
+            self.contract = getattr(futures_group, f"{config.FUTURES_CODE}R1")
             self.connected = True
-            print(f"[BrokerAPI] ✅ 已連接永豐金 API，合約: {self.contract}")
+            
+            mode_text = "🧪 模擬環境 (Simulation)" if self.paper_trading else "🔥 實盤環境 (Live)"
+            print(f"[BrokerAPI] ✅ 已連接永豐金 API {mode_text}，合約: {self.contract.code}")
             return True
 
         except Exception as e:
@@ -148,17 +146,15 @@ class BrokerAPI:
     def get_current_price(self) -> float:
         """
         取得目前最新價格。
-
-        Paper Trading 模式下取本地數據的最後收盤價。
-        實盤模式下取即時報價。
+        （無論實盤或模擬盤，只要 API 已連接，皆取即時報價）
         """
-        if self.paper_trading or not self.api:
+        if not self.api:
             df = self.get_historical_data(days=5)
             if not df.empty:
                 return float(df["Close"].iloc[-1])
             return 0.0
 
-        # 實盤：取即時報價
+        # 取即時報價
         try:
             snapshot = self.api.snapshots([self.contract])
             if snapshot:

@@ -1,0 +1,20 @@
+[
+  {
+    "order_id": "PAPER_085005809319",
+    "timestamp": "2026-05-27T08:50:05.809319",
+    "action": "Buy",
+    "direction": 1,
+    "contracts": 1,
+    "price": 44558.0,
+    "mode": "paper"
+  },
+  {
+    "order_id": "PAPER_102512456632",
+    "timestamp": "2026-05-27T10:25:12.456632",
+    "action": "Sell",
+    "direction": -1,
+    "contracts": 1,
+    "price": 45024.0,
+    "mode": "paper"
+  }
+]

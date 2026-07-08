@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 用 Shioaji API 下載小台指期 (MXF) 歷史 1 分鐘 K 線，並聚合為 5 分鐘 K 線
 =============================================================================
@@ -16,7 +18,11 @@ import time
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv(*args, **kwargs):
+        return False
 
 # 載入 .env（沿用 intraday-scanner 的 credentials）
 env_paths = [
@@ -28,7 +34,10 @@ for p in env_paths:
         load_dotenv(p)
         break
 
-import shioaji as sj
+try:
+    import shioaji as sj
+except ImportError:
+    sj = None
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 KBAR_1M_DIR = os.path.join(DATA_DIR, "kbar_1m")
@@ -39,6 +48,9 @@ os.makedirs(KBAR_1M_DIR, exist_ok=True)
 
 def _login() -> sj.Shioaji:
     """登入 Shioaji（使用模擬帳號即可取歷史資料）"""
+    if sj is None:
+        raise ImportError("shioaji is required for downloading new kbar data")
+
     api_key = os.getenv("API_KEY", os.getenv("SHIOAJI_API_KEY", ""))
     secret_key = os.getenv("SECRET_KEY", os.getenv("SHIOAJI_SECRET_KEY", ""))
 
@@ -99,9 +111,9 @@ def download_1m_kbars(api, start_date: str, end_date: str):
             df["ts"] = pd.to_datetime(df["ts"])
             df = df.rename(columns={"ts": "datetime"})
 
-            # 過濾：只保留正常交易時段 (08:45 ~ 13:45)
-            df = df[(df["datetime"].dt.time >= pd.Timestamp("08:45").time()) &
-                     (df["datetime"].dt.time <= pd.Timestamp("13:45").time())]
+            # 取消時段過濾，保留全時段（包含夜盤 15:00 ~ 05:00）
+            # df = df[(df["datetime"].dt.time >= pd.Timestamp("08:45").time()) &
+            #          (df["datetime"].dt.time <= pd.Timestamp("13:45").time())]
 
             if df.empty:
                 continue
@@ -166,9 +178,12 @@ def aggregate_to_5min() -> pd.DataFrame:
     df_5m = df_5m.rename(columns={"datetime": "Date"})
     df_5m = df_5m.set_index("Date")
 
-    # 存 Parquet
-    df_5m.to_parquet(KBAR_5M_PATH)
-    print(f"✅ 5 分 K 已存至 {KBAR_5M_PATH}")
+    # 存 Parquet（若目前環境沒有 pyarrow/fastparquet，仍回傳 DataFrame 供驗證使用）
+    try:
+        df_5m.to_parquet(KBAR_5M_PATH)
+        print(f"✅ 5 分 K 已存至 {KBAR_5M_PATH}")
+    except ImportError:
+        print("⚠️ Parquet engine unavailable; using rebuilt DataFrame without saving parquet.")
     print(f"   範圍: {df_5m.index[0]} ~ {df_5m.index[-1]} | 共 {len(df_5m)} 根 K 棒")
 
     return df_5m
@@ -177,8 +192,11 @@ def aggregate_to_5min() -> pd.DataFrame:
 def load_5min_data() -> pd.DataFrame:
     """讀取已聚合的 5 分鐘 K 線"""
     if os.path.exists(KBAR_5M_PATH):
-        df = pd.read_parquet(KBAR_5M_PATH)
-        return df
+        try:
+            return pd.read_parquet(KBAR_5M_PATH)
+        except ImportError:
+            print("⚠️ Parquet engine unavailable; rebuilding 5-minute bars from CSV cache...")
+            return aggregate_to_5min()
     else:
         print("⚠️ 5 分 K 資料不存在，嘗試聚合...")
         return aggregate_to_5min()

@@ -22,7 +22,9 @@ import time
 import signal
 import argparse
 import traceback
-from datetime import datetime, date
+import json
+import pandas as pd
+from datetime import datetime, date, timedelta
 
 # 確保當前目錄在 path 中
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -119,8 +121,9 @@ class AutoTrader:
                 now = datetime.now()
                 close_time = now.replace(
                     hour=config.TRADING_END_HOUR,
-                    minute=config.TRADING_END_MINUTE + 5
-                )
+                    minute=config.TRADING_END_MINUTE,
+                    second=0, microsecond=0
+                ) + timedelta(minutes=5)
                 if now > close_time:
                     self._on_market_close()
                     # 等到明天開盤
@@ -162,8 +165,17 @@ class AutoTrader:
             print(f"   ⛔ 風控攔截: {reason}")
             return
 
-        # 2. 取得歷史數據
-        df = self.broker.get_historical_data(days=config.WARMUP_BARS * 2)
+        # 2. 取得歷史數據或即時狀態
+        if "Session Edge Ensemble" in self.engine.strategy_name:
+            current_price = self.broker.get_current_price()
+            if current_price <= 0:
+                print("   ⚠️ 無法取得有效即時報價，跳過本次檢查")
+                return
+            now = datetime.now()
+            df = pd.DataFrame({"Close": [current_price]}, index=[now])
+        else:
+            df = self.broker.get_historical_data(days=config.WARMUP_BARS * 2)
+            
         if df.empty:
             print("   ⚠️ 無法取得行情數據")
             return
@@ -232,6 +244,7 @@ class AutoTrader:
             self.current_position = direction
             self.entry_price = price
             self.broker.update_paper_position(direction, price)
+            self._save_position()
 
             notifier.notify_trade("OPEN", dir_text, price, reason)
             print(f"   ✅ 開倉成功: {dir_text} @ {price:.0f}")
@@ -273,6 +286,7 @@ class AutoTrader:
             self.current_position = 0
             self.entry_price = 0
             self.broker.update_paper_position(0, 0)
+            self._save_position()
 
             return pnl_cash
         else:
@@ -283,11 +297,43 @@ class AutoTrader:
     # 輔助方法
     # ═══════════════════════════════════════════════════════════
 
+    def _save_position(self):
+        """儲存模擬盤持倉狀態到檔案。"""
+        if not self.paper_trading:
+            return
+        state = {
+            "current_position": self.current_position,
+            "entry_price": self.entry_price,
+            "updated_at": datetime.now().isoformat()
+        }
+        state_path = os.path.join(config.LOG_DIR, "position_state.json")
+        os.makedirs(config.LOG_DIR, exist_ok=True)
+        try:
+            with open(state_path, "w", encoding="utf-8") as f:
+                json.dump(state, f, indent=2)
+        except Exception as e:
+            print(f"[警告] 無法儲存持倉狀態: {e}")
+
     def _restore_position(self):
         """從券商或模擬盤恢復持倉狀態。"""
-        pos = self.broker.get_position()
-        self.current_position = pos["direction"]
-        self.entry_price = pos["entry_price"]
+        if self.paper_trading:
+            state_path = os.path.join(config.LOG_DIR, "position_state.json")
+            if os.path.exists(state_path):
+                try:
+                    with open(state_path, "r", encoding="utf-8") as f:
+                        state = json.load(f)
+                    self.current_position = state.get("current_position", 0)
+                    self.entry_price = state.get("entry_price", 0.0)
+                    self.broker.update_paper_position(self.current_position, self.entry_price)
+                except Exception as e:
+                    print(f"[警告] 無法讀取持倉狀態: {e}")
+            else:
+                self.current_position = 0
+                self.entry_price = 0.0
+        else:
+            pos = self.broker.get_position()
+            self.current_position = pos["direction"]
+            self.entry_price = pos["entry_price"]
 
         if self.current_position != 0:
             dir_text = "多單" if self.current_position == 1 else "空單"
@@ -312,12 +358,11 @@ class AutoTrader:
         now = datetime.now()
         tomorrow_open = now.replace(
             hour=config.TRADING_START_HOUR,
-            minute=config.TRADING_START_MINUTE - 5,
+            minute=config.TRADING_START_MINUTE,
             second=0, microsecond=0
-        )
+        ) - timedelta(minutes=5)
         if now > tomorrow_open:
             # 加一天
-            from datetime import timedelta
             tomorrow_open += timedelta(days=1)
 
         wait_seconds = (tomorrow_open - now).total_seconds()

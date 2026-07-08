@@ -57,7 +57,7 @@ class IntradayBacktester:
         # 2. 訊號延遲一根 K 棒（信號出現 → 下一根開盤執行）
         raw_position = signals.shift(1).fillna(0).astype(int)
 
-        # 3. 強制每日收盤平倉
+        # 3. 處理跨日與結算日
         position = raw_position.copy()
         dates = df.index.date
         unique_dates = sorted(set(dates))
@@ -68,11 +68,23 @@ class IntradayBacktester:
             if len(day_idx) == 0:
                 continue
 
-            # 找到收盤前的 bar（>= force_close_time 的第一根）
-            close_bars = day_idx[day_idx.time >= self.force_close_time]
-            if len(close_bars) > 0:
-                close_from = close_bars[0]
-                position.loc[close_from:day_idx[-1]] = 0
+            dt = pd.Timestamp(d)
+            # 判斷是否為台指期結算日 (每個月第三個星期三)
+            if dt.weekday() == 2 and 15 <= dt.day <= 21:
+                # 結算日 13:25 強制平倉避開換倉跳動
+                close_time = pd.Timestamp("13:25").time()
+                close_bars = day_idx[day_idx.time >= close_time]
+                
+                if len(close_bars) > 0:
+                    close_from = close_bars[0]
+                    # 暫停交易直到夜盤 15:00 開盤 (新合約)
+                    night_bars = day_idx[day_idx.time >= pd.Timestamp("15:00").time()]
+                    if len(night_bars) > 0:
+                        clear_end = night_bars[0] - pd.Timedelta(minutes=1)
+                    else:
+                        clear_end = day_idx[-1]
+                    
+                    position.loc[close_from:clear_end] = 0
 
         # 4. 逐 bar 計算損益
         price_change = df["Close"].diff()

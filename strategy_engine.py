@@ -55,7 +55,10 @@ class StrategyEngine:
             "date": str
         }
         """
-        if df.empty or len(df) < config.WARMUP_BARS:
+        # 檢查是否需要暖機資料
+        needs_warmup = "Session Edge Ensemble" not in self.strategy_name
+        
+        if df.empty or (needs_warmup and len(df) < config.WARMUP_BARS):
             return {
                 "signal": 0, "prev_signal": 0,
                 "action_needed": "HOLD",

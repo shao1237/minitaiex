@@ -735,6 +735,43 @@ def hybrid_squeeze_vix_fix(df: pd.DataFrame) -> pd.Series:
     return signal
 
 
+def session_edge_ensemble(df: pd.DataFrame) -> pd.Series:
+    """
+    Session Edge Ensemble
+    - A compact intraday calendar ensemble for MXF 5-minute bars.
+    - Uses only timestamp-based session sleeves, so it is deterministic and
+      does not read future prices.
+    - Weekday uses pandas convention: Monday=0, ..., Friday=4.
+    """
+    signal = pd.Series(0, index=df.index, dtype=int)
+
+    rules = [
+        ("18:10", "22:10", 1, 0),   # Monday evening continuation
+        ("00:00", "09:40", 1, 1),   # Tuesday overnight/open continuation
+        # ("09:40", "13:40", -1, 1),  # Removed: weak/unstable Tuesday regular-session short sleeve.
+        # ("15:00", "17:00", 1, 1),   # Removed: noisy Tuesday afternoon long sleeve.
+        ("08:50", "10:25", 1, 2),   # Wednesday opening continuation
+        # ("15:15", "18:15", 1, 2),   # Removed: choppy Wednesday afternoon long sleeve.
+        # ("02:45", "04:15", 1, 3),   # Removed: low-edge Thursday pre-open long sleeve.
+        ("09:10", "09:25", -1, 4),  # Friday opening fade
+        ("09:30", "13:30", 1, 4),   # Friday regular-session continuation
+    ]
+
+    for start, end, side, weekday in rules:
+        start_time = pd.Timestamp(start).time()
+        end_time = pd.Timestamp(end).time()
+
+        if start_time <= end_time:
+            in_window = (df.index.time >= start_time) & (df.index.time < end_time)
+        else:
+            in_window = (df.index.time >= start_time) | (df.index.time < end_time)
+
+        mask = in_window & (df.index.weekday == weekday)
+        signal.loc[mask] = side
+
+    return signal
+
+
 # ═══════════════════════════════════════════════════════════════
 # 策略註冊表
 # ═══════════════════════════════════════════════════════════════
@@ -756,4 +793,5 @@ STRATEGIES = {
     "Swing High Low (Patternsmart)": swing_high_low,
     "Keltner Channel": keltner_channel,
     "🚀 Hybrid: Squeeze + Vix Fix": hybrid_squeeze_vix_fix,
+    "Session Edge Ensemble": session_edge_ensemble,
 }

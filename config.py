@@ -34,11 +34,11 @@ COMMISSION_PER_SIDE = 20       # 單邊手續費 (TWD)
 # 策略設定
 # ═══════════════════════════════════════════════════════════════
 # 主策略（回測中 Sharpe 最高、MDD 最低的策略）
-PRIMARY_STRATEGY = "ADX and DI (BeikabuOyaji)"
+PRIMARY_STRATEGY = "Session Edge Ensemble"
 # 策略所需的歷史 K 棒數量（確保指標有足夠的暖機資料）
 WARMUP_BARS = 60
 # 使用日線 (D) 或分鐘線
-TIMEFRAME = "D"
+TIMEFRAME = "15T"
 
 # ═══════════════════════════════════════════════════════════════
 # 風控參數
@@ -51,14 +51,14 @@ INITIAL_CAPITAL = 200_000      # 帳戶建議最低資金
 # ═══════════════════════════════════════════════════════════════
 # 交易時段（台灣時間）
 # ═══════════════════════════════════════════════════════════════
-TRADING_START_HOUR = 8
-TRADING_START_MINUTE = 45
-TRADING_END_HOUR = 13
-TRADING_END_MINUTE = 45
+TRADING_START_HOUR = 0
+TRADING_START_MINUTE = 0
+TRADING_END_HOUR = 23
+TRADING_END_MINUTE = 59
 
 # ═══════════════════════════════════════════════════════════════
 # 系統設定
 # ═══════════════════════════════════════════════════════════════
 LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
 PAPER_TRADING = True  # True = 模擬盤（不實際下單）, False = 實盤
-SIGNAL_CHECK_INTERVAL = 60  # 每幾秒檢查一次信號 (秒)
+SIGNAL_CHECK_INTERVAL = 15  # 每幾秒檢查一次信號 (秒)

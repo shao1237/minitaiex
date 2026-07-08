@@ -1,0 +1,47 @@
+[
+  {
+    "order_id": "PAPER_090142335920",
+    "timestamp": "2026-05-25T09:01:42.335920",
+    "action": "Sell",
+    "direction": -1,
+    "contracts": 1,
+    "price": 43413.0,
+    "mode": "paper"
+  },
+  {
+    "order_id": "PAPER_181002344104",
+    "timestamp": "2026-05-25T18:10:02.344104",
+    "action": "Buy",
+    "direction": 1,
+    "contracts": 1,
+    "price": 43966.0,
+    "mode": "paper"
+  },
+  {
+    "order_id": "PAPER_221002202625",
+    "timestamp": "2026-05-25T22:10:02.202625",
+    "action": "Sell",
+    "direction": -1,
+    "contracts": 1,
+    "price": 44244.0,
+    "mode": "paper"
+  },
+  {
+    "order_id": "PAPER_000012285738",
+    "timestamp": "2026-05-26T00:00:12.285738",
+    "action": "Buy",
+    "direction": 1,
+    "contracts": 1,
+    "price": 44298.0,
+    "mode": "paper"
+  },
+  {
+    "order_id": "PAPER_094041999624",
+    "timestamp": "2026-05-26T09:40:41.999624",
+    "action": "Sell",
+    "direction": -1,
+    "contracts": 1,
+    "price": 0.0,
+    "mode": "paper"
+  }
+]

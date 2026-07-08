@@ -1,0 +1,11 @@
+[
+  {
+    "order_id": "PAPER_023027386605",
+    "timestamp": "2026-05-19T02:30:27.386605",
+    "action": "Buy",
+    "direction": 1,
+    "contracts": 1,
+    "price": 41172.359375,
+    "mode": "paper"
+  }
+]
