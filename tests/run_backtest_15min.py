@@ -7,7 +7,7 @@ import os
 import traceback
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from strategies import STRATEGIES
 from intraday_backtester import IntradayBacktester

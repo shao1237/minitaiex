@@ -10,7 +10,7 @@ import warnings
 
 warnings.filterwarnings('ignore')
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from strategies import STRATEGIES
 from intraday_backtester import IntradayBacktester
 from download_kbar import load_5min_data

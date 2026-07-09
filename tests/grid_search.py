@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 """
 肯特納通道核心參數與輔助參數之 Grid Search 尋優腳本
 ====================================================
@@ -19,7 +22,7 @@ ARTIFACT_DIR = r"C:\Users\User\.gemini\antigravity\brain\b66c39bc-2b4c-41a5-b216
 os.makedirs(ARTIFACT_DIR, exist_ok=True)
 
 def run_grid_search():
-    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
     path_5m = os.path.join(data_dir, "mxf_5min.parquet")
     path_15m = os.path.join(data_dir, "mxf_15min.parquet")
     

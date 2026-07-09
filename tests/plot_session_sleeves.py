@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 """
 Plot and export the 9 independent Session Edge Ensemble sleeve equity curves.
 

@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 """
 全方位量化策略檢測計畫 (Full-Spectrum Quant Validation Pipeline)
 ==================================================================
@@ -29,7 +32,7 @@ def run_pipeline():
     print("=" * 80)
     
     # 1. 載入 15 分 K 數據 (做為主力測試標的)
-    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
     path_15m = os.path.join(data_dir, "mxf_15min.parquet")
     
     if not os.path.exists(path_15m):
