@@ -123,7 +123,7 @@ class BrokerAPI:
         """
         # 不論模式，都優先從本地 CSV 讀取（確保與回測一致）
         try:
-            from download_data import load_local_data
+            from core.download_data import load_local_data
             df = load_local_data()
             # 取最近 N 天
             if len(df) > days:

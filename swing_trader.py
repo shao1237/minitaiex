@@ -175,24 +175,61 @@ class SwingAutoTrader:
             print(f"   ⛔ 風控攔截: {reason}")
             return
 
-        # 2. 獲取行情數據 (抓最近 60 根 15 分 K 線以利暖機)
-        # 注意：實盤中，回傳的最後一根 K 棒 Close 會隨時間變動，
-        # 為避免訊號閃爍，指標與 Swing 判定必須以「已收盤」的上一根 K 棒為準！
-        df = self.broker.get_historical_data(days=15)
-        if df.empty or len(df) < 30:
-            print("   ⚠️ 無法取得足夠行情數據，跳過本次檢查")
+        # 2. 同步並讀取 15分K Parquet 歷史數據
+        if self.broker.api and self.broker.connected:
+            try:
+                from core.download_kbar import download_1m_kbars, aggregate_to_5min
+                from core.aggregate_15min import aggregate_5m_to_15m
+                
+                # 同步最近 5 天的資料
+                today_str = datetime.now().strftime("%Y-%m-%d")
+                start_str = (datetime.now() - timedelta(days=5)).strftime("%Y-%m-%d")
+                
+                download_1m_kbars(self.broker.api, start_str, today_str)
+                aggregate_to_5min()
+                aggregate_5m_to_15m()
+                print("   🔄 已即時同步最新 K 線 Parquet 資料")
+            except Exception as e:
+                print(f"   ⚠️ 即時 K 線同步失敗 (將使用本地歷史): {e}")
+
+        # 載入本地 Parquet 資料
+        root_dir = os.path.dirname(os.path.abspath(__file__))
+        parquet_path = os.path.join(root_dir, "data", "mxf_15min.parquet")
+        if not os.path.exists(parquet_path):
+            print(f"   ❌ 找不到 15分K 本地 Parquet 資料，路徑: {parquet_path}")
             return
 
-        # 計算指標
-        df_indicators = compute_indicators(df, ema_len=self.ema_len, atr_len=self.ema_len, kc_mult=self.kc_mult)
-        
-        # 最新價格 (跳動報價)
+        try:
+            df = pd.read_parquet(parquet_path)
+        except Exception as e:
+            print(f"   ❌ 讀取 Parquet 資料失敗: {e}")
+            return
+
+        if len(df) < 50:
+            print("   ⚠️ 行情數據不足以暖機指標")
+            return
+
+        # 3. 獲取即時價格 (跳動報價)
         curr_price = self.broker.get_current_price()
         if curr_price <= 0:
             # 降級方案：使用已收盤最後一根 K 棒 Close
-            curr_price = float(df_indicators["Close"].iloc[-1])
+            curr_price = float(df["Close"].iloc[-1])
+        else:
+            # 將最新即時跳動報價併入 DataFrame 最後一根 (模擬未完成的即時 K 棒)
+            now = datetime.now()
+            new_row = pd.DataFrame({
+                "Open": [curr_price],
+                "High": [curr_price],
+                "Low": [curr_price],
+                "Close": [curr_price],
+                "Volume": [0]
+            }, index=[now])
+            df = pd.concat([df, new_row])
 
-        # 已收盤的最新 K 棒索引 (倒數第二根)
+        # 計算指標
+        df_indicators = compute_indicators(df, ema_len=self.ema_len, atr_len=self.ema_len, kc_mult=self.kc_mult)
+
+        # 已收盤的最新 K 棒索引 (倒數第二根，因為最後一根是我們拼接的即時跳動價)
         t = len(df_indicators) - 2
         
         # 指標值 (已收盤)
