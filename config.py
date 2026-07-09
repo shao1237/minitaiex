@@ -16,6 +16,8 @@ SHIOAJI_SECRET_KEY = os.getenv("SHIOAJI_SECRET_KEY", "")
 SHIOAJI_PERSON_ID = os.getenv("SHIOAJI_PERSON_ID", "")  # 身分證字號
 SHIOAJI_CA_PATH = os.getenv("SHIOAJI_CA_PATH", "")  # 憑證路徑
 SHIOAJI_CA_PASSWORD = os.getenv("SHIOAJI_CA_PASSWORD", "")  # 憑證密碼
+# 設為 true 使用模擬模式 (sj.Shioaji(simulation=True))
+SHIOAJI_SIMULATION = os.getenv("SHIOAJI_SIMULATION", "True").lower() == "true"
 
 # ═══════════════════════════════════════════════════════════════
 # Telegram 通知

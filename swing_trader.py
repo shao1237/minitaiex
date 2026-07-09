@@ -262,7 +262,7 @@ class SwingAutoTrader:
             self.cooldown_counter -= 1
             self._save_state()
 
-        print(f"⏰ 檢查時間: {datetime.now().strftime('%M:%S')} | 現價: {curr_price:.0f} | 部位: {self.position} | 停損點: {self.stop_loss:.0f} | 冷卻: {self.cooldown_counter}")
+        print(f"⏰ 檢查時間: {datetime.now().strftime('%H:%M:%S')} | 現價: {curr_price:.0f} | 部位: {self.position} | 停損點: {self.stop_loss:.0f} | 冷卻: {self.cooldown_counter}")
 
         # ─── A. 空手狀態 (Position == 0.0) ───
         if self.position == 0.0 and self.cooldown_counter == 0:
@@ -372,11 +372,13 @@ class SwingAutoTrader:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="台指期 Swing 策略自動交易")
     parser.add_argument("--live", action="store_true", help="啟用實盤交易 (預設為 Paper Trading)")
+    parser.add_argument("--sim", action="store_true", help="啟用模擬交易 (Paper Trading)")
     parser.add_argument("--once", action="store_true", help="單次信號檢查後退出")
     args = parser.parse_args()
 
-    # 實盤二次確認防呆機制
-    paper_trading = True
+    # 判定模式 (優先級: --live > --sim > env/config)
+    paper_trading = config.SHIOAJI_SIMULATION
+    
     if args.live:
         print("⚠️⚠️⚠️ 警告：您正試圖啟動【實盤交易】！ ⚠️⚠️⚠️")
         confirm = input("確認請輸入 'YES'：")
@@ -384,6 +386,9 @@ if __name__ == "__main__":
             paper_trading = False
         else:
             print("❌ 實盤啟動被取消，降級為模擬交易。")
+            paper_trading = True
+    elif args.sim:
+        paper_trading = True
 
     trader = SwingAutoTrader(paper_trading=paper_trading)
     trader.start(run_once=args.once)
