@@ -76,7 +76,7 @@ class SwingAutoTrader:
     # ═══════════════════════════════════════════════════════════
 
     def _save_state(self):
-        """將目前交易狀態儲存至 JSON"""
+        """將目前交易狀態原子寫入至 JSON (使用 tmp 檔與 os.replace 防止損毀)"""
         state = {
             "position": self.position,
             "entry_price": self.entry_price,
@@ -84,11 +84,19 @@ class SwingAutoTrader:
             "cooldown_counter": self.cooldown_counter,
             "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
+        tmp_file = self.state_file + ".tmp"
         try:
-            with open(self.state_file, "w", encoding="utf-8") as f:
+            with open(tmp_file, "w", encoding="utf-8") as f:
                 json.dump(state, f, indent=4)
+            # 原子替換
+            os.replace(tmp_file, self.state_file)
         except Exception as e:
-            print(f"[Error] 無法儲存交易狀態: {e}")
+            print(f"[Error] 原子寫入交易狀態失敗: {e}")
+            if os.path.exists(tmp_file):
+                try:
+                    os.remove(tmp_file)
+                except:
+                    pass
 
     def _load_state(self):
         """從 JSON 載入交易狀態"""
@@ -107,6 +115,50 @@ class SwingAutoTrader:
         except Exception as e:
             print(f"[Error] 載入交易狀態失敗: {e}")
 
+    def _reconcile_position(self) -> bool:
+        """雙向對齊機制 (Reconciliation)：比對本地 JSON 狀態與券商實體帳戶持倉"""
+        print("🔍 啟動雙向持倉對齊檢查 (Reconciliation)...")
+        # 取得實體持倉
+        real_pos = self.broker.get_position()
+        real_dir = real_pos.get("direction", 0)
+        real_contracts = real_pos.get("contracts", 0)
+
+        # 實體持倉轉換為策略狀態部位 (Long-Only)
+        expected_position = 0.0
+        if real_dir == 1:
+            if real_contracts == 2:
+                expected_position = 1.0
+            elif real_contracts == 1:
+                expected_position = 0.5
+            else:
+                expected_position = -999.0  # 口數不匹配
+        elif real_dir == -1:
+            expected_position = -999.0  # 持有空單不匹配
+
+        if expected_position == -999.0:
+            err_msg = (
+                f"🚨 <b>【嚴重對齊警告】券商實體持倉異常！</b>\n"
+                f"券商持倉方向: {real_dir} | 口數: {real_contracts}\n"
+                f"此持倉與策略 Long-Only 不相符，為保障帳戶安全，系統拒絕交易！請人工檢查部位。"
+            )
+            print(f"❌ {err_msg.replace('<b>', '').replace('</b>', '')}")
+            notifier.send_message(err_msg)
+            return False
+
+        if self.position != expected_position:
+            err_msg = (
+                f"🚨 <b>【嚴重對齊警告】雙向持倉不一致！</b>\n"
+                f"本地 JSON 記錄狀態: {self.position} (1.0=2口, 0.5=1口)\n"
+                f"券商實體實際持倉: {expected_position} (實際口數: {real_contracts})\n"
+                f"可能存在檔案毀損或人工手動平倉，為保障安全已自動終止程式！"
+            )
+            print(f"❌ {err_msg.replace('<b>', '').replace('</b>', '')}")
+            notifier.send_message(err_msg)
+            return False
+
+        print("✅ 雙向持倉對齊一致，系統安全，准予交易。")
+        return True
+
     # ═══════════════════════════════════════════════════════════
     # 啟動與循環
     # ═══════════════════════════════════════════════════════════
@@ -119,6 +171,11 @@ class SwingAutoTrader:
 
         # 載入歷史部位狀態
         self._load_state()
+
+        # 執行雙向對齊檢查
+        if not self._reconcile_position():
+            print("❌ 雙向對齊失敗，系統自動終止運作。")
+            return
 
         mode_text = "Paper Trading" if self.paper_trading else "實盤交易"
         notifier.send_message(
