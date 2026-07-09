@@ -105,6 +105,14 @@ def run_grid_search():
     # 儲存完整的尋優 CSV
     search_csv_path = os.path.join(ARTIFACT_DIR, "grid_search_results.csv")
     result_df.to_csv(search_csv_path, index=False)
+    try:
+        import shutil
+        local_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "reports")
+        os.makedirs(local_dir, exist_ok=True)
+        shutil.copy(search_csv_path, os.path.join(local_dir, "grid_search_results.csv"))
+        print("💾 成果已同步備份至本地 reports 目錄")
+    except Exception as e:
+        print(f"⚠️ 備份失敗: {e}")
     print(f"\n💾 完整的參數尋優結果已存至 {search_csv_path}")
     
     # 分別列出 15分K 與 5分K 的 Top 5 參數組合以利分析

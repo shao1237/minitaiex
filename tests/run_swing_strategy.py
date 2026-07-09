@@ -121,6 +121,15 @@ def run_all_backtests():
     summary_csv_path = os.path.join(ARTIFACT_DIR, "backtest_summary.csv")
     summary_df.to_csv(summary_csv_path)
     print(f"📊 統計摘要表已存至 {summary_csv_path}")
+    try:
+        import shutil
+        local_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "reports")
+        os.makedirs(local_dir, exist_ok=True)
+        shutil.copy(plot_path, os.path.join(local_dir, "equity_comparison.png"))
+        shutil.copy(summary_csv_path, os.path.join(local_dir, "backtest_summary.csv"))
+        print("💾 成果已同步備份至本地 reports 目錄")
+    except Exception as e:
+        print(f"⚠️ 備份失敗: {e}")
 
 if __name__ == "__main__":
     run_all_backtests()

@@ -326,6 +326,15 @@ def run_pipeline():
     csv_path = os.path.join(ARTIFACT_DIR, "validation_results.csv")
     val_df.to_csv(csv_path, index=False)
     print(f"📊 檢定分析報告 CSV 已存至 {csv_path}")
+    try:
+        import shutil
+        local_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "reports")
+        os.makedirs(local_dir, exist_ok=True)
+        shutil.copy(plot_path, os.path.join(local_dir, "quant_validation_charts.png"))
+        shutil.copy(csv_path, os.path.join(local_dir, "validation_results.csv"))
+        print("💾 成果已同步備份至本地 reports 目錄")
+    except Exception as e:
+        print(f"⚠️ 備份失敗: {e}")
     print("=" * 80)
 
 if __name__ == "__main__":
