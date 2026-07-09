@@ -1,10 +1,15 @@
 """
-執行 Swing High Low + Keltner Channel 策略的回測與對比 (最佳實戰參數版)
-========================================================================
-- 5分K 僅做多 (原始)
-- 15分K 僅做多 (原始)
-- 15分K 僅做多 (優化實戰版): 斜率門檻=0.04, 停損冷卻=12根K棒, 停利保本維持原設定
-- 15分K 多空雙向 (優化實戰版): 斜率門檻=0.04, 停損冷卻=12根K棒, 停利保本維持原設定
+執行 Swing High Low + Keltner Channel 策略的指定參數回測與對比 (最佳實戰參數版)
+==========================================================================
+- 使用使用者指定的參數：
+  - 肯特納中軌 (EMA 週期): 20
+  - 肯特納寬度 (ATR 乘數): 2.0
+  - 波段高低點確認 K 線數: 左右各 2 根 (swing_len = 2)
+- 對比：
+  1. 5分K 僅做多 (原始)
+  2. 15分K 僅做多 (原始)
+  3. 15分K 僅做多 (優化實戰版): 斜率門檻=0.04, 停損冷卻=12根K棒, 停利保本維持原設定
+  4. 15分K 多空雙向 (優化實戰版): 斜率門檻=0.04, 停損冷卻=12根K棒, 停利保本維持原設定
 - 繪製對比圖表並輸出為 CSV
 """
 import os
@@ -33,6 +38,11 @@ def run_all_backtests():
     initial_cap = 500_000.0
     backtester = SwingKeltnerBacktester(initial_capital=initial_cap, commission=20, slippage=1.0, multiplier=50.0)
     
+    # 核心參數
+    ema_len = 20
+    kc_mult = 2.0
+    swing_len = 2
+    
     # 測試方案列表
     configs = [
         {
@@ -60,8 +70,15 @@ def run_all_backtests():
         name = cfg["name"]
         print(f"🚀 執行回測: {cfg['label']} ...")
         
-        # 執行回測
-        res = backtester.run_backtest(cfg["df"], buffer_pct=0.0015, **cfg["params"])
+        # 執行回測 (傳入使用者指定的核心參數)
+        res = backtester.run_backtest(
+            cfg["df"], 
+            ema_len=ema_len, 
+            kc_mult=kc_mult, 
+            swing_len=swing_len,
+            buffer_pct=0.0015, 
+            **cfg["params"]
+        )
         
         df_indicators = res["indicators"]
         trades = res["trades"]
@@ -79,7 +96,7 @@ def run_all_backtests():
         print(f"   交易筆數: {stats['total_trades']} | 勝率: {stats['win_rate_pct']:.2f}% | Profit Factor: {stats['profit_factor']:.2f} | Sharpe: {stats['sharpe_ratio']:.2f}")
         print("-" * 50)
         
-    plt.title("Swing High Low + Keltner Channel 策略最佳實戰對比 (2025 - 2026)", fontsize=14)
+    plt.title(f"Swing High Low + Keltner Channel 策略指定參數對比 (EMA={ema_len}, Mult={kc_mult}, Swing={swing_len})", fontsize=14)
     plt.xlabel("日期", fontsize=12)
     plt.ylabel("權益 (TWD)", fontsize=12)
     plt.grid(True, linestyle="--", alpha=0.5)
