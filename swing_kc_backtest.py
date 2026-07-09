@@ -1,10 +1,10 @@
 """
-Swing High Low + Keltner Channel 策略回測引擎 (完全參數化優化版)
-==============================================================
+Swing High Low + Keltner Channel 策略回測引擎 (數據純化與完全參數化優化版)
+========================================================================
+- 實作合約換倉機制 (結算日 13:25 強制平倉，暫停交易至 15:00 換新合約)
+- 摩擦成本真實化：單邊手續費、滑價，以及成交金額的 10 萬分之 2 期交稅
 - 支援核心參數完全參數化 (EMA 週期、ATR 乘數、左右確認 K 線數)
-- 支援 EMA 斜率絕對門檻過濾 (避免在走平的盤整區進場)
-- 支援停損冷卻期 (Cooldown) 與同平坦區重複訊號忽略
-- 支援 5 分 K 與 15 分 K 逐棒狀態機回測
+- 支援 EMA 斜率絕對門檻過濾與停損冷卻期 (Cooldown)
 """
 import pandas as pd
 import numpy as np
@@ -55,13 +55,22 @@ def compute_indicators(df: pd.DataFrame, ema_len: int = 20, atr_len: int = 20, k
     return df
 
 class SwingKeltnerBacktester:
-    """ Swing High Low + Keltner Channel 逐棒回測器 """
+    """ Swing High Low + Keltner Channel 逐棒回測器 (真實成本與結算日換倉) """
     def __init__(self, initial_capital: float = 500_000, commission: float = 20, slippage: float = 1.0, multiplier: float = 50.0):
         self.initial_capital = initial_capital
         self.commission = commission
         self.slippage = slippage
         self.multiplier = multiplier
+        self.tax_rate = 0.00002  # 期交稅十萬分之二
         
+    def _calc_one_way_cost(self, size: float, price: float) -> float:
+        """ 計算單邊真實交易成本 (手續費 + 滑價 + 期交稅) """
+        # size: 1.0 代表 2 口小台 (100點乘數), 0.5 代表 1 口小台 (50點乘數)
+        contracts = size / 0.5
+        cost_fixed = contracts * (self.commission + self.slippage * self.multiplier)
+        cost_tax = price * (contracts * self.multiplier) * self.tax_rate
+        return cost_fixed + cost_tax
+
     def run_backtest(self, df: pd.DataFrame, 
                      ema_len: int = 20, 
                      kc_mult: float = 2.0, 
@@ -71,23 +80,13 @@ class SwingKeltnerBacktester:
                      slope_threshold: float = 0.04, 
                      cooldown_bars: int = 12, 
                      early_break_even: bool = False) -> Dict:
-        """ 
-        執行逐棒回測 (完全參數化)
-        
-        Parameters
-        ----------
-        ema_len : int  中軌 EMA 週期
-        kc_mult : float  Keltner Channel 乘數
-        swing_len : int  波段確認K線數 (左右各 N 根)
-        slope_threshold : float  斜率門檻
-        cooldown_bars : int  停損冷卻 K 棒數
-        early_break_even : bool  是否在反彈未過前高時拉保本
-        """
+        """ 執行完全參數化的逐棒回測 """
         # 1. 預先計算指標
         df_indicators = compute_indicators(df, ema_len=ema_len, atr_len=ema_len, kc_mult=kc_mult)
         
         # 轉成 numpy arrays
         dates = df_indicators.index.values
+        ts_dates = pd.to_datetime(dates)
         opens = df_indicators["Open"].values
         highs = df_indicators["High"].values
         lows = df_indicators["Low"].values
@@ -119,16 +118,15 @@ class SwingKeltnerBacktester:
         trades_log = []
         equity = [self.initial_capital]
         current_equity = self.initial_capital
-        one_way_cost = self.commission + self.slippage * self.multiplier
         
         recent_swing_highs = []
         recent_swing_lows = []
         
-        # 開跑的起點 (需要有足夠的 K 棒來判斷 Swing High/Low)
         start_bar = 2 * swing_len
         
         # 逐棒執行
         for t in range(start_bar, n_bars - 1):
+            curr_time = ts_dates[t]
             next_open = opens[t+1]
             next_high = highs[t+1]
             next_low = lows[t+1]
@@ -137,8 +135,39 @@ class SwingKeltnerBacktester:
             if cooldown_counter > 0:
                 cooldown_counter -= 1
                 
+            # --- A. 合約結算日換倉邏輯 (每月第三個星期三) ---
+            # 結算日: weekday == 2 且日期在 15~21 號之間
+            is_settlement_day = (curr_time.weekday() == 2) and (15 <= curr_time.day <= 21)
+            is_rollover_time = is_settlement_day and (curr_time.hour == 13 and curr_time.minute >= 25)
+            
+            # 結算日 13:25 強制平倉
+            if is_rollover_time and position != 0.0:
+                exit_p = closes[t]  # 以當前結算價平倉
+                direction = "LONG" if position > 0 else "SHORT"
+                pnl = 0.0
+                
+                # 計算真實出場成本
+                cost_exit = self._calc_one_way_cost(abs(position), exit_p)
+                
+                if position > 0:
+                    pnl = (exit_p - entry_price) * position * self.multiplier - cost_exit
+                else:
+                    pnl = (entry_price - exit_p) * abs(position) * self.multiplier - cost_exit
+                    
+                current_equity += pnl
+                trades_log.append({
+                    "entry_time": entry_time,
+                    "exit_time": curr_time,
+                    "direction": direction,
+                    "entry_price": entry_price,
+                    "exit_price": exit_p,
+                    "pnl": pnl,
+                    "type": "ROLLOVER_CLOSE",
+                    "size": abs(position)
+                })
+                position = 0.0
+                
             # --- 1. 計算參數化波段高低點 ---
-            # 檢查目標 K 棒: t - swing_len
             target_bar = t - swing_len
             
             # 判斷是否為 Swing Low
@@ -175,7 +204,8 @@ class SwingKeltnerBacktester:
             if position > 0:
                 if next_low <= stop_loss:
                     exit_p = min(next_open, stop_loss)
-                    pnl = (exit_p - entry_price) * position * self.multiplier - (position * one_way_cost)
+                    cost_exit = self._calc_one_way_cost(position, exit_p)
+                    pnl = (exit_p - entry_price) * position * self.multiplier - cost_exit
                     current_equity += pnl
                     
                     is_loss = (exit_p < entry_price)
@@ -195,7 +225,8 @@ class SwingKeltnerBacktester:
                 
                 elif position == 1.0 and next_high >= upper[t+1]:
                     exit_p = max(next_open, upper[t+1])
-                    pnl_half = (exit_p - entry_price) * 0.5 * self.multiplier - (0.5 * one_way_cost)
+                    cost_exit = self._calc_one_way_cost(0.5, exit_p)
+                    pnl_half = (exit_p - entry_price) * 0.5 * self.multiplier - cost_exit
                     current_equity += pnl_half
                     
                     trades_log.append({
@@ -231,7 +262,8 @@ class SwingKeltnerBacktester:
             elif position < 0:
                 if next_high >= stop_loss:
                     exit_p = max(next_open, stop_loss)
-                    pnl = (entry_price - exit_p) * abs(position) * self.multiplier - (abs(position) * one_way_cost)
+                    cost_exit = self._calc_one_way_cost(abs(position), exit_p)
+                    pnl = (entry_price - exit_p) * abs(position) * self.multiplier - cost_exit
                     current_equity += pnl
                     
                     is_loss = (exit_p > entry_price)
@@ -251,7 +283,8 @@ class SwingKeltnerBacktester:
                         
                 elif position == -1.0 and next_low <= lower[t+1]:
                     exit_p = min(next_open, lower[t+1])
-                    pnl_half = (entry_price - exit_p) * 0.5 * self.multiplier - (0.5 * one_way_cost)
+                    cost_exit = self._calc_one_way_cost(0.5, exit_p)
+                    pnl_half = (entry_price - exit_p) * 0.5 * self.multiplier - cost_exit
                     current_equity += pnl_half
                     
                     trades_log.append({
@@ -283,8 +316,11 @@ class SwingKeltnerBacktester:
                         if new_sh < stop_loss:
                             stop_loss = new_sh
                             
-            # --- 3. 檢查進場信號 (空手且非冷卻期) ---
-            if position == 0.0 and cooldown_counter == 0:
+            # --- 3. 檢查進場信號 (空手、非冷卻期，且非結算日換倉時段) ---
+            # 結算日 13:25 到 15:00 禁止開倉
+            is_banned_by_rollover = is_settlement_day and (curr_time.hour == 13 and curr_time.minute >= 25)
+            
+            if position == 0.0 and cooldown_counter == 0 and not is_banned_by_rollover:
                 is_trend_long = (ema_slope[t] > slope_threshold) and (pct_above_ema[t] >= 0.6) and touched_upper[t]
                 
                 if is_trend_long and pulled_back_long[t] and swing_low_near_support:
@@ -292,7 +328,9 @@ class SwingKeltnerBacktester:
                     entry_price = next_open
                     entry_time = dates[t+1]
                     stop_loss = lows[target_bar] * (1 - buffer_pct)
-                    current_equity -= (1.0 * one_way_cost)
+                    #真實開倉成本
+                    cost_entry = self._calc_one_way_cost(1.0, entry_price)
+                    current_equity -= cost_entry
                     
                 elif not long_only:
                     is_trend_short = (ema_slope[t] < -slope_threshold) and (pct_below_ema[t] >= 0.6) and touched_lower[t]
@@ -301,9 +339,10 @@ class SwingKeltnerBacktester:
                         entry_price = next_open
                         entry_time = dates[t+1]
                         stop_loss = highs[target_bar] * (1 + buffer_pct)
-                        current_equity -= (1.0 * one_way_cost)
+                        cost_entry = self._calc_one_way_cost(1.0, entry_price)
+                        current_equity -= cost_entry
             
-            # 估算本棒未實現損益併入 Equity
+            # 估算未實現損益併入 Equity
             unrealized_pnl = 0.0
             if position > 0:
                 unrealized_pnl = (next_close - entry_price) * position * self.multiplier
@@ -325,7 +364,6 @@ def calculate_stats(initial_capital: float, final_equity: float, equity_series: 
     """計算回測的統計指標"""
     total_return = (final_equity - initial_capital) / initial_capital * 100
     
-    # 交易統計
     n_trades = len(trades)
     wins = [t["pnl"] for t in trades if t["pnl"] > 0]
     losses = [t["pnl"] for t in trades if t["pnl"] <= 0]
@@ -333,17 +371,14 @@ def calculate_stats(initial_capital: float, final_equity: float, equity_series: 
     win_rate = len(wins) / n_trades * 100 if n_trades > 0 else 0
     profit_factor = sum(wins) / abs(sum(losses)) if losses and sum(losses) != 0 else float("inf")
     
-    # Max Drawdown
     rolling_max = equity_series.cummax()
     drawdown = (equity_series - rolling_max) / rolling_max * 100
     max_drawdown = drawdown.min()
     
-    # 年化報酬率 (CAGR)
     days = (df.index[-1] - df.index[0]).days
     years = days / 365.25
     ann_return = ((final_equity / initial_capital) ** (1 / years) - 1) * 100 if years > 0 else 0
     
-    # Sharpe Ratio
     daily_equity = equity_series.resample("D").last().ffill()
     daily_returns = daily_equity.pct_change().dropna()
     sharpe = (daily_returns.mean() / daily_returns.std() * (252 ** 0.5)) if daily_returns.std() != 0 else 0
