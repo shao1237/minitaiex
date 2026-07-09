@@ -8,7 +8,7 @@ import os
 from datetime import datetime, date
 from typing import Dict, List
 import config
-import notifier
+from core import notifier
 
 
 class RiskManager:

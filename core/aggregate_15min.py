@@ -2,8 +2,8 @@ import os
 import pandas as pd
 
 def aggregate_5m_to_15m():
-    data_path = os.path.join(os.path.dirname(__file__), "data", "mxf_5min.parquet")
-    out_path = os.path.join(os.path.dirname(__file__), "data", "mxf_15min.parquet")
+    data_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "mxf_5min.parquet")
+    out_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "mxf_15min.parquet")
     
     if not os.path.exists(data_path):
         print("❌ 找不到 5 分 K 資料檔案")

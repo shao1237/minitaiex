@@ -6,7 +6,7 @@ import os
 import pandas as pd
 import yfinance as yf
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 CSV_PATH = os.path.join(DATA_DIR, "taiex_daily.csv")
 
 

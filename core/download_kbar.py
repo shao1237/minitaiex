@@ -26,7 +26,7 @@ except ImportError:
 
 # 載入 .env（沿用 intraday-scanner 的 credentials）
 env_paths = [
-    os.path.join(os.path.dirname(__file__), ".env"),
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"),
     r"D:\Antigravity\intraday-scanner\.env",
 ]
 for p in env_paths:

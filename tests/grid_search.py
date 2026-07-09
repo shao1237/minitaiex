@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import os
 import pandas as pd
 import numpy as np
-from swing_kc_backtest import SwingKeltnerBacktester, calculate_stats
+from core.swing_kc_backtest import SwingKeltnerBacktester, calculate_stats
 
 # Artifact 輸出目錄
 ARTIFACT_DIR = r"C:\Users\User\.gemini\antigravity\brain\b66c39bc-2b4c-41a5-b216-d91083c6b9a3"

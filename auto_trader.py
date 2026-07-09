@@ -31,8 +31,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config
 import notifier
-from broker_api import BrokerAPI
-from risk_manager import RiskManager
+from core.broker_api import BrokerAPI
+from core.risk_manager import RiskManager
 from strategy_engine import StrategyEngine
 
 

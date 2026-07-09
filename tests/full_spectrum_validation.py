@@ -16,7 +16,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from statistics import NormalDist
-from swing_kc_backtest import SwingKeltnerBacktester, calculate_stats
+from core.swing_kc_backtest import SwingKeltnerBacktester, calculate_stats
 
 # 設定 Matplotlib 中文字體
 plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei']
