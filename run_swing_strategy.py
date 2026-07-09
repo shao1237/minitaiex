@@ -1,15 +1,9 @@
 """
-執行 Swing High Low + Keltner Channel 策略的指定參數回測與對比 (最佳實戰參數版)
+執行 Swing High Low + Keltner Channel 策略的指定與優化核心參數回測對比
 ==========================================================================
-- 使用使用者指定的參數：
-  - 肯特納中軌 (EMA 週期): 20
-  - 肯特納寬度 (ATR 乘數): 2.0
-  - 波段高低點確認 K 線數: 左右各 2 根 (swing_len = 2)
-- 對比：
-  1. 5分K 僅做多 (原始)
-  2. 15分K 僅做多 (原始)
-  3. 15分K 僅做多 (優化實戰版): 斜率門檻=0.04, 停損冷卻=12根K棒, 停利保本維持原設定
-  4. 15分K 多空雙向 (優化實戰版): 斜率門檻=0.04, 停損冷卻=12根K棒, 停利保本維持原設定
+- 原核心參數對比 (EMA=20, ATR=2.0, Swing=2, 無斜率無冷卻)
+- 黃金實戰參數對比 (15min: EMA=10, ATR=2.5, Swing=1, 斜率=0.04, 冷卻=12)
+- 黃金實戰參數對比 (5min: EMA=10, ATR=2.5, Swing=1, 斜率=0.02, 冷卻=12)
 - 繪製對比圖表並輸出為 CSV
 """
 import os
@@ -38,28 +32,23 @@ def run_all_backtests():
     initial_cap = 500_000.0
     backtester = SwingKeltnerBacktester(initial_capital=initial_cap, commission=20, slippage=1.0, multiplier=50.0)
     
-    # 核心參數
-    ema_len = 20
-    kc_mult = 2.0
-    swing_len = 2
-    
     # 測試方案列表
     configs = [
         {
-            "name": "5min_Long_Original", "df": df_5m, "label": "5分K 僅做多 (原始)",
-            "params": {"long_only": True, "slope_threshold": 0.0, "cooldown_bars": 0, "early_break_even": False}
+            "name": "5min_Long_Original", "df": df_5m, "label": "5分K 僅做多 (原核心參數)",
+            "params": {"ema_len": 20, "kc_mult": 2.0, "swing_len": 2, "slope_threshold": 0.0, "cooldown_bars": 0, "early_break_even": False}
         },
         {
-            "name": "15min_Long_Original", "df": df_15m, "label": "15分K 僅做多 (原始)",
-            "params": {"long_only": True, "slope_threshold": 0.0, "cooldown_bars": 0, "early_break_even": False}
+            "name": "15min_Long_Original", "df": df_15m, "label": "15分K 僅做多 (原核心參數)",
+            "params": {"ema_len": 20, "kc_mult": 2.0, "swing_len": 2, "slope_threshold": 0.0, "cooldown_bars": 0, "early_break_even": False}
         },
         {
-            "name": "15min_Long_Optimized", "df": df_15m, "label": "15分K 僅做多 (優化實戰版)",
-            "params": {"long_only": True, "slope_threshold": 0.04, "cooldown_bars": 12, "early_break_even": False}
+            "name": "15min_Long_Tuned", "df": df_15m, "label": "15分K 僅做多 (黃金實戰調教)",
+            "params": {"ema_len": 10, "kc_mult": 2.5, "swing_len": 1, "slope_threshold": 0.04, "cooldown_bars": 12, "early_break_even": False}
         },
         {
-            "name": "15min_LS_Optimized", "df": df_15m, "label": "15分K 多空雙向 (優化實戰版)",
-            "params": {"long_only": False, "slope_threshold": 0.04, "cooldown_bars": 12, "early_break_even": False}
+            "name": "5min_Long_Tuned", "df": df_5m, "label": "5分K 僅做多 (黃金實戰調教)",
+            "params": {"ema_len": 10, "kc_mult": 2.5, "swing_len": 1, "slope_threshold": 0.02, "cooldown_bars": 12, "early_break_even": False}
         }
     ]
     
@@ -70,14 +59,17 @@ def run_all_backtests():
         name = cfg["name"]
         print(f"🚀 執行回測: {cfg['label']} ...")
         
-        # 執行回測 (傳入使用者指定的核心參數)
+        # 執行回測
         res = backtester.run_backtest(
             cfg["df"], 
-            ema_len=ema_len, 
-            kc_mult=kc_mult, 
-            swing_len=swing_len,
+            ema_len=cfg["params"]["ema_len"], 
+            kc_mult=cfg["params"]["kc_mult"], 
+            swing_len=cfg["params"]["swing_len"],
             buffer_pct=0.0015, 
-            **cfg["params"]
+            long_only=True,
+            slope_threshold=cfg["params"]["slope_threshold"],
+            cooldown_bars=cfg["params"]["cooldown_bars"],
+            early_break_even=cfg["params"]["early_break_even"]
         )
         
         df_indicators = res["indicators"]
@@ -96,7 +88,7 @@ def run_all_backtests():
         print(f"   交易筆數: {stats['total_trades']} | 勝率: {stats['win_rate_pct']:.2f}% | Profit Factor: {stats['profit_factor']:.2f} | Sharpe: {stats['sharpe_ratio']:.2f}")
         print("-" * 50)
         
-    plt.title(f"Swing High Low + Keltner Channel 策略指定參數對比 (EMA={ema_len}, Mult={kc_mult}, Swing={swing_len})", fontsize=14)
+    plt.title("Swing High Low + Keltner Channel 核心參數調教對比 (2025 - 2026)", fontsize=14)
     plt.xlabel("日期", fontsize=12)
     plt.ylabel("權益 (TWD)", fontsize=12)
     plt.grid(True, linestyle="--", alpha=0.5)
