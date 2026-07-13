@@ -248,32 +248,54 @@ class BrokerAPI:
         Returns
         -------
         dict : {"direction": int, "contracts": int, "entry_price": float}
+              - direction: 1=多, -1=空, 0=無部位
+              - contracts: 持倉口數 (>=0)
+              - entry_price: 持倉均價
+              保證：contracts==0 時 direction 一律為 0
         """
+        _EMPTY = {"direction": 0, "contracts": 0, "entry_price": 0.0}
+
         if self.paper_trading:
+            direction = self._paper_position or 0
+            contracts = abs(direction)
+            if contracts == 0:
+                direction = 0
             return {
-                "direction": self._paper_position,
-                "contracts": abs(self._paper_position),
-                "entry_price": self._paper_entry_price,
+                "direction": direction,
+                "contracts": contracts,
+                "entry_price": self._paper_entry_price if contracts > 0 else 0.0,
             }
 
         # 實盤查詢
         if not self.api:
-            return {"direction": 0, "contracts": 0, "entry_price": 0}
+            return _EMPTY.copy()
 
         try:
             positions = self.api.list_positions(self.api.futopt_account)
+            if positions is None:
+                return _EMPTY.copy()
             for pos in positions:
-                if config.FUTURES_CODE in str(pos.code):
-                    direction = 1 if pos.direction == "Buy" else -1
+                if config.FUTURES_CODE in str(getattr(pos, 'code', '')):
+                    quantity = getattr(pos, 'quantity', 0) or 0
+                    if quantity == 0:
+                        return _EMPTY.copy()
+                    raw_dir = getattr(pos, 'direction', None)
+                    direction = 1 if raw_dir == "Buy" else (-1 if raw_dir == "Sell" else 0)
+                    if direction == 0:
+                        # 方向不明確，視為異常
+                        print(f"[BrokerAPI] ⚠️ 部位方向不明確: direction={raw_dir}, quantity={quantity}")
+                        return _EMPTY.copy()
+                    raw_price = getattr(pos, 'price', 0)
+                    entry_price = float(raw_price) if raw_price else 0.0
                     return {
                         "direction": direction,
-                        "contracts": pos.quantity,
-                        "entry_price": float(pos.price),
+                        "contracts": quantity,
+                        "entry_price": entry_price,
                     }
         except Exception as e:
             print(f"[BrokerAPI] 部位查詢失敗: {e}")
 
-        return {"direction": 0, "contracts": 0, "entry_price": 0}
+        return _EMPTY.copy()
 
     def update_paper_position(self, direction: int, entry_price: float):
         """更新模擬盤部位。"""
