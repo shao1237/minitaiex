@@ -39,7 +39,7 @@ try:
 except ImportError:
     sj = None
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 KBAR_1M_DIR = os.path.join(DATA_DIR, "kbar_1m")
 KBAR_5M_PATH = os.path.join(DATA_DIR, "mxf_5min.parquet")
 
